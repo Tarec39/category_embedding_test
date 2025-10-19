@@ -12,6 +12,7 @@ export default function Page() {
   const [mode, setMode] = useState<"list" | "search">("list");
   const [busy, setBusy] = useState(false);
   const [deleteQueue, setDeleteQueue] = useState<string[]>([]);
+  const [registerQueue, setRegisterQueue] = useState<string[]>([]);
 
   async function loadList() {
     setBusy(true);
@@ -64,33 +65,59 @@ export default function Page() {
     processNext();
   }, [deleteQueue, busy]);
 
+  // 登録キューを処理（直列化）
+  useEffect(() => {
+    if (registerQueue.length === 0 || busy) return;
+
+    const processNext = async () => {
+      const name = registerQueue[0];
+      setBusy(true);
+
+      try {
+        const r = await fetch("/api/categories", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name }),
+        });
+
+        if (r.status === 409) {
+          alert("同名カテゴリは登録できません。");
+          setRegisterQueue((prev) => prev.slice(1));
+          return;
+        }
+
+        if (!r.ok) {
+          throw new Error((await r.json()).error ?? `HTTP ${r.status}`);
+        }
+
+        const added = (await r.json()) as { id: string; name: string };
+
+        // 成功：キューから削除
+        setRegisterQueue((prev) => prev.slice(1));
+
+        // 一覧モードなら即時反映
+        if (mode === "list") {
+          setRows((prev) => [...prev, added]);
+        }
+      } catch (e: any) {
+        alert(`登録失敗 (${name}): ${e.message ?? "登録に失敗しました"}`);
+        setRegisterQueue((prev) => prev.slice(1));
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    processNext();
+  }, [registerQueue, busy, mode]);
+
   async function onRegister() {
-  const name = input.trim();
-  if (!name) return;
-  setBusy(true);
-  try {
-    const r = await fetch("/api/categories", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (r.status === 409) { alert("同名カテゴリは登録できません。"); return; }
-    if (!r.ok) throw new Error((await r.json()).error ?? `HTTP ${r.status}`);
-
-    const added = (await r.json()) as { id: string; name: string };
-    setInput("");
-
-    // ★ 楽観更新：一覧モードなら即時反映
-    setRows((prev) => (mode === "list" ? [...prev, added] : prev));
-
-    // 検索モード中に登録した場合はそのまま（必要なら再検索を呼ぶ）
-    // await onSearch(); // ←「登録語で検索したい」など要件に応じて
-  } catch (e: any) {
-    alert(e.message ?? "登録に失敗しました");
-  } finally {
-    setBusy(false);
+    const name = input.trim();
+    if (!name) return;
+    
+    // 登録キューに追加（直列化により競合を回避）
+    setRegisterQueue((prev) => [...prev, name]);
+    setInput(""); // 入力欄をクリア
   }
-}
 
   async function onSearch() {
     const query = input.trim();
