@@ -81,18 +81,27 @@ export default function Page() {
   }
 
 async function onDelete(id: string) {
+  // 楽観更新：先にUIから消す
   const before = rows;
-  setRows((prev) => prev.filter((x) => x.id !== id)); // 楽観更新
+  setRows((prev) => prev.filter((x) => x.id !== id));
+
   try {
-    const r = await fetch(`/api/categories/${id}`, { method: "DELETE", headers: { "cache-control": "no-cache" } });
-    if (!r.ok) {
+    const r = await fetch(`/api/categories/${id}`, {
+      method: "DELETE",
+      headers: { "cache-control": "no-cache" },
+    });
+
+    // 冪等APIにしたので200のはず。もし古いデプロイで404でも成功扱いにする。
+    if (!r.ok && r.status !== 404) {
       const e = await r.json().catch(() => ({}));
       throw new Error(e.error ?? `HTTP ${r.status}`);
     }
-    // 背景で最新を再同期（モードに応じて）
+
+    // 背景で最新を同期（CDNゆらぎ対策）
     setTimeout(() => (mode === "list" ? loadList() : onSearch()), 150);
   } catch (e: any) {
-    setRows(before); // ロールバック
+    // 失敗時のみロールバック
+    setRows(before);
     alert(e.message ?? "削除に失敗しました");
   }
 }
