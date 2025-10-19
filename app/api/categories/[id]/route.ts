@@ -3,19 +3,17 @@ export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
 import { NextResponse } from "next/server";
-import { readStore, writeStore } from "@/lib/store";
+import { updateStore } from "@/lib/store";
 
 type Params = { params: { id: string } };
 
 export async function DELETE(_: Request, { params }: Params) {
-  const store = await readStore();
-  const before = store.categories.length;
-  store.categories = store.categories.filter((c) => c.id !== params.id);
+  const deleted = await updateStore((store) => {
+    const before = store.categories.length;
+    store.categories = store.categories.filter((c) => c.id !== params.id);
+    return store.categories.length !== before;
+  });
 
-  const deleted = store.categories.length !== before;
-  if (deleted) {
-    await writeStore(store);
-  }
   // 404にせず、常に200で冪等に（already deletedでもOKとする）
   return NextResponse.json(
     { ok: true, deleted },

@@ -6,7 +6,7 @@ export const fetchCache = "force-no-store";
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { embedText } from "@/lib/embeddings";
-import { readStore, writeStore, hasDuplicateName } from "@/lib/store";
+import { readStore, updateStore, hasDuplicateName } from "@/lib/store";
 import type { Category } from "@/lib/types";
 
 
@@ -26,18 +26,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "name required" }, { status: 400 });
     }
 
-    const store = await readStore();
-    if (hasDuplicateName(store.categories, name)) {
-      return NextResponse.json({ error: "duplicate name" }, { status: 409 });
-    }
-
+    // embedding生成（時間がかかる）
     const embedding = await embedText(name);
     const cat: Category = { id: randomUUID(), name: name.trim(), embedding };
-    store.categories.push(cat);
-    await writeStore(store);
+
+    // 楽観的ロック付きで追加
+    await updateStore((store) => {
+      if (hasDuplicateName(store.categories, name)) {
+        throw new Error("duplicate name");
+      }
+      store.categories.push(cat);
+      return cat;
+    });
 
     return NextResponse.json({ id: cat.id, name: cat.name });
   } catch (e: any) {
+    if (e.message === "duplicate name") {
+      return NextResponse.json({ error: "duplicate name" }, { status: 409 });
+    }
     return NextResponse.json({ error: e?.message ?? "error" }, { status: 500 });
   }
 }

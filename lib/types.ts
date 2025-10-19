@@ -7,7 +7,7 @@ export type Category = {
 };
 
 export type Store = {
-  version: 1;
+  version: number;
   categories: Category[];
 };
 
