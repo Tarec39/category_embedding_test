@@ -19,7 +19,10 @@ export async function readStore(): Promise<Store> {
   // ← ここがポイント：毎回違うURLにしてCDN/Fetchキャッシュを避ける
   
   const bust = `t=${Date.now()}`;
-  const res = await fetch(`${url}?${bust}`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
+  const res = await fetch(`${url}?${bust}`, {
+    cache: "no-store",
+    headers: { "Cache-Control": "no-cache" },
+  });
   if (!res.ok) throw new Error(`failed to read blob: ${res.status}`);
   return (await res.json()) as Store;
 }
