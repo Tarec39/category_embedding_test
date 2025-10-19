@@ -1,49 +1,36 @@
-// app/api/categories/route.ts などの各APIファイルの先頭付近に追加
+import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
+import { sql } from "@/lib/db";
+import { embedText } from "@/lib/embeddings";
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
-import { NextResponse } from "next/server";
-import { randomUUID } from "crypto";
-import { embedText } from "@/lib/embeddings";
-import { readStore, updateStore, hasDuplicateName } from "@/lib/store";
-import type { Category } from "@/lib/types";
-
-
-
 export async function GET() {
-  const store = await readStore();
-  // embeddingは返さない（一覧用）
-  return NextResponse.json({
-    items: store.categories.map(({ id, name }) => ({ id, name })),
-  });
+  const rows = await sql`SELECT id::text AS id, name FROM categories ORDER BY name ASC`;
+  return NextResponse.json({ items: rows });
 }
 
 export async function POST(req: Request) {
+  const { name } = await req.json();
+  const n = String(name ?? "").trim();
+  if (!n) return NextResponse.json({ error: "name required" }, { status: 400 });
+
   try {
-    const { name } = (await req.json()) as { name?: string };
-    if (!name || !name.trim()) {
-      return NextResponse.json({ error: "name required" }, { status: 400 });
-    }
+    const emb = await embedText(n); // number[]（1536）
 
-    // embedding生成（時間がかかる）
-    const embedding = await embedText(name);
-    const cat: Category = { id: randomUUID(), name: name.trim(), embedding };
+    await sql`
+      INSERT INTO categories (id, name, embedding)
+      VALUES (${randomUUID()}::uuid, ${n}, ${emb}::vector)
+    `;
 
-    // 楽観的ロック付きで追加
-    await updateStore((store) => {
-      if (hasDuplicateName(store.categories, name)) {
-        throw new Error("duplicate name");
-      }
-      store.categories.push(cat);
-      return cat;
-    });
-
-    return NextResponse.json({ id: cat.id, name: cat.name });
+    return NextResponse.json({ name: n });
   } catch (e: any) {
-    if (e.message === "duplicate name") {
+    const msg = String(e?.message ?? "");
+    if (msg.includes("duplicate") || msg.includes("unique")) {
       return NextResponse.json({ error: "duplicate name" }, { status: 409 });
     }
-    return NextResponse.json({ error: e?.message ?? "error" }, { status: 500 });
+    return NextResponse.json({ error: "insert failed" }, { status: 500 });
   }
 }

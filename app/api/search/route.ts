@@ -1,48 +1,34 @@
+import { NextResponse } from "next/server";
+import { sql } from "@/lib/db";
+import { embedText } from "@/lib/embeddings";
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
-import { NextResponse } from "next/server";
-import { embedText, dot } from "@/lib/embeddings";
-import { readStore } from "@/lib/store";
-import type { SearchResult } from "@/lib/types";
-
 
 const DEFAULT_TOPK = 20;
-const DEFAULT_THRESHOLD = 0;
+const DEFAULT_THRESHOLD = 0.75; // 類似度（1 - cosine距離）
 
 export async function POST(req: Request) {
-  try {
-    const { query, topK = DEFAULT_TOPK, threshold = DEFAULT_THRESHOLD } =
-      (await req.json()) as {
-        query?: string;
-        topK?: number;
-        threshold?: number;
-      };
+  const { query, topK = DEFAULT_TOPK, threshold = DEFAULT_THRESHOLD } = await req.json();
 
-    if (!query || !query.trim()) {
-      return NextResponse.json({ error: "query required" }, { status: 400 });
-    }
+  const q = String(query ?? "").trim();
+  if (!q) return NextResponse.json({ error: "query required" }, { status: 400 });
 
-    const store = await readStore();
-    if (store.categories.length === 0) {
-      return NextResponse.json({ results: [] as SearchResult[] });
-    }
+  const vec = await embedText(q); // number[]
 
-    const q = await embedText(query);
-    const scored = store.categories.map((c) => ({
-      id: c.id,
-      name: c.name,
-      score: dot(q, c.embedding), // 単位長前提→内積=コサイン
-    }));
+  // pgvector: <=> は cosine距離（小さいほど近い）
+  // 類似度 = 1 - 距離 で計算し、threshold でフィルタ
+  const rows = await sql<{ id: string; name: string; score: number }[]>`
+    WITH q AS (SELECT ${vec}::vector AS v)
+    SELECT id::text AS id, name,
+           1 - (embedding <=> (SELECT v FROM q)) AS score
+    FROM categories
+    WHERE 1 - (embedding <=> (SELECT v FROM q)) >= ${threshold}
+    ORDER BY embedding <=> (SELECT v FROM q) ASC
+    LIMIT ${topK}
+  `;
 
-    const filtered = scored
-      .filter((x) => x.score >= threshold)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
-      .map((x, i) => ({ ...x, rank: i + 1 }));
-
-    return NextResponse.json({ results: filtered });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "error" }, { status: 500 });
-  }
+  const results = rows.map((r, i) => ({ ...r, rank: i + 1 }));
+  return NextResponse.json({ results });
 }
