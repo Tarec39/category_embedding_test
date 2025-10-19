@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { embedText } from "@/lib/embeddings";
+import { toVectorLiteral } from "@/lib/pgvector";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -16,19 +17,18 @@ export async function POST(req: Request) {
   const q = String(query ?? "").trim();
   if (!q) return NextResponse.json({ error: "query required" }, { status: 400 });
 
-  const vec = await embedText(q);
+  const vecArr = await embedText(q);
+  const vec = toVectorLiteral(vecArr); // "[...]" に変換
 
-  // ★ ジェネリクスは使わず、後ろで型アサーション
   const rows = (await sql`
     WITH q AS (SELECT ${vec}::vector AS v)
-    SELECT id::text AS id,
-           name,
+    SELECT id::text AS id, name,
            1 - (embedding <=> (SELECT v FROM q)) AS score
     FROM categories
     WHERE 1 - (embedding <=> (SELECT v FROM q)) >= ${threshold}
     ORDER BY embedding <=> (SELECT v FROM q) ASC
     LIMIT ${topK}
-  `) as Row[];
+  `) as { id: string; name: string; score: number }[];
 
   const results = rows.map((r, i) => ({ ...r, rank: i + 1 }));
   return NextResponse.json({ results });
