@@ -1,7 +1,3 @@
-/* app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* 任意のベース調整 */
-html, body { height: 100%; }
