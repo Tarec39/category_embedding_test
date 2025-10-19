@@ -97,8 +97,9 @@ async function onDelete(id: string) {
       throw new Error(e.error ?? `HTTP ${r.status}`);
     }
 
-    // 背景で最新を同期（CDNゆらぎ対策）
-    setTimeout(() => (mode === "list" ? loadList() : onSearch()), 150);
+    // 削除成功 - 楽観更新のみで完了（サーバー再取得しない）
+    // もし最新データを取得したい場合は、十分な遅延を設ける
+    // setTimeout(() => (mode === "list" ? loadList() : onSearch()), 1000);
   } catch (e: any) {
     // 失敗時のみロールバック
     setRows(before);
