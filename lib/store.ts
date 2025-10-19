@@ -13,7 +13,13 @@ async function findStoreUrl(): Promise<string | undefined> {
 export async function readStore(): Promise<Store> {
   const url = await findStoreUrl();
   if (!url) return { version: 1, categories: [] };
-  const res = await fetch(url, { cache: "no-store" });
+
+  // ← ここがポイント：毎回違うURLにしてCDN/Fetchキャッシュを避ける
+  const bust = `t=${Date.now()}`;
+  const res = await fetch(`${url}?${bust}`, {
+    cache: "no-store",
+    headers: { "Cache-Control": "no-cache" },
+  });
   if (!res.ok) throw new Error(`failed to read blob: ${res.status}`);
   return (await res.json()) as Store;
 }

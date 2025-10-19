@@ -29,31 +29,32 @@ export default function Page() {
   }, []);
 
   async function onRegister() {
-    const name = input.trim();
-    if (!name) return;
-    setBusy(true);
-    try {
-      const r = await fetch("/api/categories", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      if (r.status === 409) {
-        alert("同名カテゴリは登録できません。");
-        return;
-      }
-      if (!r.ok) {
-        const e = await r.json().catch(() => ({}));
-        throw new Error(e.error ?? `HTTP ${r.status}`);
-      }
-      setInput("");
-      await loadList();
-    } catch (e: any) {
-      alert(e.message ?? "登録に失敗しました");
-    } finally {
-      setBusy(false);
-    }
+  const name = input.trim();
+  if (!name) return;
+  setBusy(true);
+  try {
+    const r = await fetch("/api/categories", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (r.status === 409) { alert("同名カテゴリは登録できません。"); return; }
+    if (!r.ok) throw new Error((await r.json()).error ?? `HTTP ${r.status}`);
+
+    const added = (await r.json()) as { id: string; name: string };
+    setInput("");
+
+    // ★ 楽観更新：一覧モードなら即時反映
+    setRows((prev) => (mode === "list" ? [...prev, added] : prev));
+
+    // 検索モード中に登録した場合はそのまま（必要なら再検索を呼ぶ）
+    // await onSearch(); // ←「登録語で検索したい」など要件に応じて
+  } catch (e: any) {
+    alert(e.message ?? "登録に失敗しました");
+  } finally {
+    setBusy(false);
   }
+}
 
   async function onSearch() {
     const query = input.trim();
