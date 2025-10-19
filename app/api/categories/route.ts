@@ -1,13 +1,15 @@
+// app/api/categories/route.ts などの各APIファイルの先頭付近に追加
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { embedText } from "@/lib/embeddings";
 import { readStore, writeStore, hasDuplicateName } from "@/lib/store";
 import type { Category } from "@/lib/types";
 
-// app/api/categories/route.ts などの各APIファイルの先頭付近に追加
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-export const fetchCache = "force-no-store";
+
 
 export async function GET() {
   const store = await readStore();
