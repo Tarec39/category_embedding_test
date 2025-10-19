@@ -106,7 +106,7 @@ export default function Page() {
 
   return (
     <main className="mx-auto max-w-3xl p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">カテゴリ類似検索（PoC）</h1>
+      <h1 className="text-2xl font-semibold">カテゴリ類似検索</h1>
 
       <div className="flex gap-2">
         <input
