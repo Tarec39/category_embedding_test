@@ -11,6 +11,7 @@ export default function Page() {
   const [rows, setRows] = useState<Row[]>([]);
   const [mode, setMode] = useState<"list" | "search">("list");
   const [busy, setBusy] = useState(false);
+  const [deleteQueue, setDeleteQueue] = useState<string[]>([]);
 
   async function loadList() {
     setBusy(true);
@@ -27,6 +28,41 @@ export default function Page() {
   useEffect(() => {
     loadList();
   }, []);
+
+  // 削除キューを処理（直列化）
+  useEffect(() => {
+    if (deleteQueue.length === 0 || busy) return;
+
+    const processNext = async () => {
+      const id = deleteQueue[0];
+      setBusy(true);
+      
+      try {
+        const r = await fetch(`/api/categories/${id}`, {
+          method: "DELETE",
+          headers: { "cache-control": "no-cache" },
+        });
+
+        if (!r.ok && r.status !== 404) {
+          const e = await r.json().catch(() => ({}));
+          throw new Error(e.error ?? `HTTP ${r.status}`);
+        }
+
+        // 成功：キューから削除
+        setDeleteQueue((prev) => prev.slice(1));
+        // UIからも削除
+        setRows((prev) => prev.filter((x) => x.id !== id));
+      } catch (e: any) {
+        // 失敗：キューから削除して警告
+        setDeleteQueue((prev) => prev.slice(1));
+        alert(`削除失敗 (ID: ${id}): ${e.message}`);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    processNext();
+  }, [deleteQueue, busy]);
 
   async function onRegister() {
   const name = input.trim();
@@ -80,31 +116,9 @@ export default function Page() {
     }
   }
 
-async function onDelete(id: string) {
-  // 楽観更新：先にUIから消す
-  const before = rows;
-  setRows((prev) => prev.filter((x) => x.id !== id));
-
-  try {
-    const r = await fetch(`/api/categories/${id}`, {
-      method: "DELETE",
-      headers: { "cache-control": "no-cache" },
-    });
-
-    // 冪等APIにしたので200のはず。もし古いデプロイで404でも成功扱いにする。
-    if (!r.ok && r.status !== 404) {
-      const e = await r.json().catch(() => ({}));
-      throw new Error(e.error ?? `HTTP ${r.status}`);
-    }
-
-    // 削除成功 - 楽観更新のみで完了（サーバー再取得しない）
-    // もし最新データを取得したい場合は、十分な遅延を設ける
-    // setTimeout(() => (mode === "list" ? loadList() : onSearch()), 1000);
-  } catch (e: any) {
-    // 失敗時のみロールバック
-    setRows(before);
-    alert(e.message ?? "削除に失敗しました");
-  }
+function onDelete(id: string) {
+  // 削除キューに追加（直列化により競合を回避）
+  setDeleteQueue((prev) => [...prev, id]);
 }
   const showScores = mode === "search";
 
