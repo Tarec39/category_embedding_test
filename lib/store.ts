@@ -23,6 +23,7 @@ export async function writeStore(store: Store): Promise<void> {
   await put(PATH, JSON.stringify(store), {
     contentType: "application/json",
     access: "public", // 公開不要ならprivate
+    allowOverwrite: true,   // ← これを追加
   });
 }
 
