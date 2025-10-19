@@ -80,28 +80,35 @@ export default function Page() {
     }
   }
 
-  async function onDelete(id: string) {
-    // 確認なし（仕様）
-    setBusy(true);
-    try {
-      const r = await fetch(`/api/categories/${id}`, { method: "DELETE" });
-      if (!r.ok) {
-        const e = await r.json().catch(() => ({}));
-        throw new Error(e.error ?? `HTTP ${r.status}`);
-      }
-      if (mode === "list") {
-        setRows((prev) => prev.filter((x) => x.id !== id));
-      } else {
-        // 検索モード中は再検索して整合
-        await onSearch();
-      }
-    } catch (e: any) {
-      alert(e.message ?? "削除に失敗しました");
-    } finally {
-      setBusy(false);
-    }
-  }
+async function onDelete(id: string) {
+  // 楽観更新：まずUIから行を消す
+  const before = rows;
+  setRows((prev) => prev.filter((x) => x.id !== id));
 
+  setBusy(true);
+  try {
+    const r = await fetch(`/api/categories/${id}`, { method: "DELETE" });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.error ?? `HTTP ${r.status}`);
+    }
+
+    // バックグラウンドで最新を再同期（キャッシュバスター付きAPIが読む）
+    setTimeout(() => {
+      if (mode === "list") {
+        loadList();
+      } else {
+        onSearch();
+      }
+    }, 150);
+  } catch (e: any) {
+    // 失敗時はロールバック
+    setRows(before);
+    alert(e.message ?? "削除に失敗しました");
+  } finally {
+    setBusy(false);
+  }
+}
   const showScores = mode === "search";
 
   return (

@@ -9,17 +9,17 @@ async function findStoreUrl(): Promise<string | undefined> {
   return r.blobs[0]?.url;
 }
 
+
+
 /** ストアを読み込む（なければ空で初期化） */
 export async function readStore(): Promise<Store> {
   const url = await findStoreUrl();
   if (!url) return { version: 1, categories: [] };
 
   // ← ここがポイント：毎回違うURLにしてCDN/Fetchキャッシュを避ける
+  
   const bust = `t=${Date.now()}`;
-  const res = await fetch(`${url}?${bust}`, {
-    cache: "no-store",
-    headers: { "Cache-Control": "no-cache" },
-  });
+  const res = await fetch(`${url}?${bust}`, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
   if (!res.ok) throw new Error(`failed to read blob: ${res.status}`);
   return (await res.json()) as Store;
 }
