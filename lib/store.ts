@@ -11,20 +11,31 @@ async function findStoreUrl(): Promise<string | undefined> {
 
 
 
-/** ストアを読み込む（なければ空で初期化） */
 export async function readStore(): Promise<Store> {
   const url = await findStoreUrl();
   if (!url) return { version: 1, categories: [] };
 
-  // ← ここがポイント：毎回違うURLにしてCDN/Fetchキャッシュを避ける
-  
-  const bust = `t=${Date.now()}`;
-  const res = await fetch(`${url}?${bust}`, {
-    cache: "no-store",
-    headers: { "Cache-Control": "no-cache" },
-  });
-  if (!res.ok) throw new Error(`failed to read blob: ${res.status}`);
-  return (await res.json()) as Store;
+  const tryFetch = async () => {
+    const bust = `t=${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const res = await fetch(`${url}?${bust}`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!res.ok) throw new Error(`failed to read blob: ${res.status}`);
+    return (await res.json()) as Store;
+  };
+
+  // 1回で読めることが多いが、まれに遅延するので 3回まで 150ms 間隔でリトライ
+  let lastErr: unknown = null;
+  for (let i = 0; i < 3; i++) {
+    try {
+      return await tryFetch();
+    } catch (e) {
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("readStore failed");
 }
 
 /** ストアを書き戻す（last-write-winsでOK） */

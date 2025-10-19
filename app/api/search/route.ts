@@ -3,6 +3,10 @@ import { embedText, dot } from "@/lib/embeddings";
 import { readStore } from "@/lib/store";
 import type { SearchResult } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 const DEFAULT_TOPK = 20;
 const DEFAULT_THRESHOLD = 0;
 

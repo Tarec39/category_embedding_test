@@ -81,32 +81,19 @@ export default function Page() {
   }
 
 async function onDelete(id: string) {
-  // 楽観更新：まずUIから行を消す
   const before = rows;
-  setRows((prev) => prev.filter((x) => x.id !== id));
-
-  setBusy(true);
+  setRows((prev) => prev.filter((x) => x.id !== id)); // 楽観更新
   try {
-    const r = await fetch(`/api/categories/${id}`, { method: "DELETE" });
+    const r = await fetch(`/api/categories/${id}`, { method: "DELETE", headers: { "cache-control": "no-cache" } });
     if (!r.ok) {
       const e = await r.json().catch(() => ({}));
       throw new Error(e.error ?? `HTTP ${r.status}`);
     }
-
-    // バックグラウンドで最新を再同期（キャッシュバスター付きAPIが読む）
-    setTimeout(() => {
-      if (mode === "list") {
-        loadList();
-      } else {
-        onSearch();
-      }
-    }, 150);
+    // 背景で最新を再同期（モードに応じて）
+    setTimeout(() => (mode === "list" ? loadList() : onSearch()), 150);
   } catch (e: any) {
-    // 失敗時はロールバック
-    setRows(before);
+    setRows(before); // ロールバック
     alert(e.message ?? "削除に失敗しました");
-  } finally {
-    setBusy(false);
   }
 }
   const showScores = mode === "search";
