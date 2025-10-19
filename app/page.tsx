@@ -172,10 +172,6 @@ export default function Page() {
           </tbody>
         </table>
       </div>
-
-      <div className="text-xs text-gray-500">
-        ※ 同名カテゴリは登録不可。TopK=20 / 閾値=0.75（固定）。
-      </div>
     </main>
   );
 }
