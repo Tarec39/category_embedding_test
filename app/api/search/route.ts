@@ -4,7 +4,7 @@ import { readStore } from "@/lib/store";
 import type { SearchResult } from "@/lib/types";
 
 const DEFAULT_TOPK = 20;
-const DEFAULT_THRESHOLD = 0.75;
+const DEFAULT_THRESHOLD = 0;
 
 export async function POST(req: Request) {
   try {
